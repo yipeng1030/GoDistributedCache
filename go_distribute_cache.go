@@ -28,7 +28,7 @@ type Group struct {
 
 var (
 	mu     sync.RWMutex
-	groups = make(map[string]*Group)
+	groups = make(map[string]*Group) // map of group name to group
 )
 
 // NewGroup create a new instance of Group
@@ -36,13 +36,14 @@ func NewGroup(name string, cacheBytes int64, getter Getter) *Group {
 	if getter == nil {
 		panic("nil Getter")
 	}
-	mu.Lock()
-	defer mu.Unlock()
+
 	g := &Group{
 		name:      name,
 		getter:    getter,
 		mainCache: cache{cacheBytes: cacheBytes},
 	}
+	mu.Lock()
+	defer mu.Unlock()
 	groups[name] = g
 	return g
 }
