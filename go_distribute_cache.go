@@ -3,7 +3,9 @@ package GoDistributedCache
 import (
 	"fmt"
 	"log"
+	"math/rand"
 	"sync"
+	"time"
 )
 
 // A Getter loads data for a key.
@@ -24,9 +26,11 @@ type Group struct {
 	name      string
 	getter    Getter
 	mainCache cache
+	peers     PeerPicker
 }
 
 var (
+	// groups是一个节点就一个的全局变量，是真正关键的地方，用来存储所有的Group对象
 	mu     sync.RWMutex
 	groups = make(map[string]*Group) // map of group name to group
 )
@@ -69,8 +73,40 @@ func (g *Group) Get(key string) (ByteView, error) {
 	return g.load(key)
 }
 
+// RegisterPeers registers a PeerPicker for choosing remote peer
+func (g *Group) RegisterPeers(peers PeerPicker) {
+	if g.peers != nil {
+		panic("RegisterPeerPicker called more than once")
+	}
+	g.peers = peers
+}
+
 func (g *Group) load(key string) (value ByteView, err error) {
+	if g.peers != nil {
+		if peer, ok := g.peers.PickPeer(key); ok {
+			if value, err = g.getFromPeer(peer, key); err == nil {
+				return value, nil
+			}
+			log.Println("[GeeCache] Failed to get from peer", err)
+		}
+	}
+
 	return g.getLocally(key)
+}
+
+func (g *Group) getFromPeer(peer PeerGetter, key string) (ByteView, error) {
+	bytes, err := peer.Get(g.name, key)
+	if err != nil {
+		return ByteView{}, err
+	}
+	value := ByteView{b: bytes}
+	// 十分之一的概率缓存到本地，既对热点数据进行缓存，又防止分布式缓存的过度重复存储
+	rand.Seed(time.Now().UnixNano())
+	probability := rand.Float64()
+	if probability < 0.1 {
+		g.populateCache(key, value)
+	}
+	return value, nil
 }
 
 func (g *Group) getLocally(key string) (ByteView, error) {

@@ -41,8 +41,6 @@ func TestGet(t *testing.T) {
 
 	for k, v := range db {
 		if view, err := myCache.Get(k); err != nil || view.String() != v {
-			println(err)
-			println(k, v)
 			t.Fatalf("failed to get value of %s", k)
 		} // load from callback function
 		if _, err := myCache.Get(k); err != nil || loadCounts[k] > 1 {
