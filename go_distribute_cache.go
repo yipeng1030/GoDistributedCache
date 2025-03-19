@@ -1,12 +1,14 @@
 package GoDistributedCache
 
 import (
-	"GoDistributedCache/singleflight"
 	"fmt"
 	"log"
 	"math/rand"
 	"sync"
 	"time"
+
+	pb "GoDistributedCache/cachepb"
+	"GoDistributedCache/singleflight"
 )
 
 // A Getter loads data for a key.
@@ -107,11 +109,16 @@ func (g *Group) load(key string) (value ByteView, err error) {
 }
 
 func (g *Group) getFromPeer(peer PeerGetter, key string) (ByteView, error) {
-	bytes, err := peer.Get(g.name, key)
+	req := &pb.Request{
+		Group: g.name,
+		Key:   key,
+	}
+	res := &pb.Response{}
+	err := peer.Get(req, res)
 	if err != nil {
 		return ByteView{}, err
 	}
-	value := ByteView{b: bytes}
+	value := ByteView{b: res.Value}
 	// 十分之一的概率缓存到本地，既对热点数据进行缓存，又防止分布式缓存的过度重复存储
 	rand.Seed(time.Now().UnixNano())
 	probability := rand.Float64()
