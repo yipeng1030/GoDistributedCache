@@ -1,0 +1,20 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mycache-deployment
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: mycache
+  template:
+    metadata:
+      labels:
+        app: mycache
+    spec:
+      containers:
+        - name: mycache
+          image: mycache:new
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8001

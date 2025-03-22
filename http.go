@@ -7,6 +7,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -21,11 +22,12 @@ const (
 // HTTPPool implements PeerPicker for a pool of HTTP peers.
 type HTTPPool struct {
 	// this peer's base URL, e.g. "https://example.net:8000"
-	self     string
+	self string
+	// base path for all requests, e.g. "/_mycache/"
 	basePath string
 	mu       sync.RWMutex // guards peers and httpGetters
 	peers    *consistenthash.HashNodes
-	// httpGetters maps remote peer to its HTTPGetter  keyed by e.g. "http://10.0.0.2:8008"
+	// httpGetters maps remote peer to its HTTPGetter keyed by e.g. "http://10.0.0.2:8008"
 	httpGetters map[string]*httpGetter
 	PeerPicker
 }
@@ -43,14 +45,46 @@ func (p *HTTPPool) Log(format string, v ...interface{}) {
 	log.Printf("[Server %s] %s", p.self, fmt.Sprintf(format, v...))
 }
 
-// ServeHTTP handle all http requests
+// ServeHTTP handles all HTTP requests.
+// 除了原有的 /<group>/<key> 接口外，新增了 /peers 接口用于输出所有 peers 的名字及 IP 地址列表
 func (p *HTTPPool) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if !strings.HasPrefix(r.URL.Path, p.basePath) {
 		panic("HTTPPool serving unexpected path: " + r.URL.Path)
 	}
 	p.Log("%s %s", r.Method, r.URL.Path)
-	// /<basepath>/<groupname>/<key> required
-	parts := strings.SplitN(r.URL.Path[len(p.basePath):], "/", 2)
+	// 去掉 basePath 得到实际的路径
+	path := r.URL.Path[len(p.basePath):]
+
+	// 新增 /peers 路由，输出 peers 的名字和 IP 地址
+	if path == "peers" || path == "peers/" {
+		p.mu.RLock()
+		defer p.mu.RUnlock()
+		var output strings.Builder
+		for peer := range p.httpGetters {
+			// 解析 URL
+			parsedURL, err := url.Parse(peer)
+			if err != nil {
+				output.WriteString(fmt.Sprintf("Peer: %s (invalid URL)\n", peer))
+				continue
+			}
+			// 提取 host 部分（可能包含端口）
+			host := parsedURL.Host
+			// 拆分 IP 和端口
+			ip, port, err := net.SplitHostPort(host)
+			if err != nil {
+				// 如果拆分失败，则直接输出 host
+				output.WriteString(fmt.Sprintf("Peer: %s, Host: %s\n", peer, host))
+			} else {
+				output.WriteString(fmt.Sprintf("Peer: %s, IP: %s, Port: %s\n", peer, ip, port))
+			}
+		}
+		w.Header().Set("Content-Type", "text/plain")
+		w.Write([]byte(output.String()))
+		return
+	}
+
+	// 处理 /<group>/<key> 请求
+	parts := strings.SplitN(path, "/", 2)
 	if len(parts) != 2 {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
@@ -71,7 +105,6 @@ func (p *HTTPPool) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/octet-stream")
 	body, err := proto.Marshal(&pb.Response{Value: view.ByteSlice()})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -79,7 +112,6 @@ func (p *HTTPPool) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Write(body)
-
 }
 
 // Set updates the pool's list of peers.
@@ -94,7 +126,7 @@ func (p *HTTPPool) Set(peers ...string) {
 	}
 }
 
-// PickPeer picks a peer according to key
+// PickPeer picks a peer according to key.
 func (p *HTTPPool) PickPeer(key string) (PeerGetter, bool) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
