@@ -68,6 +68,11 @@ func GetGroup(name string) *Group {
 	return g
 }
 
+// GetPeers peers from cache
+func (g *Group) GetPeers() (res string) {
+	return g.peers.GetPeers()
+}
+
 // Get value for a key from cache
 func (g *Group) Get(key string) (ByteView, error) {
 	if key == "" {
@@ -89,7 +94,7 @@ func (g *Group) RegisterPeers(peers PeerPicker) {
 }
 
 func (g *Group) load(key string) (value ByteView, err error) {
-	viewi, err := g.loader.Do(key, func() (interface{}, error) {
+	view, err := g.loader.Do(key, func() (interface{}, error) {
 		if g.peers != nil {
 			if peer, ok := g.peers.PickPeer(key); ok {
 				if value, err = g.getFromPeer(peer, key); err == nil {
@@ -103,7 +108,7 @@ func (g *Group) load(key string) (value ByteView, err error) {
 	})
 
 	if err == nil {
-		return viewi.(ByteView), nil
+		return view.(ByteView), nil
 	}
 	return
 }

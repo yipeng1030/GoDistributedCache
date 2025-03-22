@@ -14,7 +14,12 @@ spec:
     spec:
       containers:
         - name: mycache
-          image: mycache:new
+          image: mycache:1.0.2
           imagePullPolicy: IfNotPresent
           ports:
-            - containerPort: 8001
+            - containerPort: 9999
+          env:
+            - name: MY_POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP

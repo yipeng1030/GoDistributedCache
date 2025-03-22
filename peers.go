@@ -6,6 +6,7 @@ import pb "GoDistributedCache/cachepb"
 // the peer that owns a specific key.
 type PeerPicker interface {
 	PickPeer(key string) (peer PeerGetter, ok bool)
+	GetPeers() string
 }
 
 // PeerGetter is the interface that must be implemented to get the value

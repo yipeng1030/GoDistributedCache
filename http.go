@@ -55,34 +55,6 @@ func (p *HTTPPool) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// 去掉 basePath 得到实际的路径
 	path := r.URL.Path[len(p.basePath):]
 
-	// 新增 /peers 路由，输出 peers 的名字和 IP 地址
-	if path == "peers" || path == "peers/" {
-		p.mu.RLock()
-		defer p.mu.RUnlock()
-		var output strings.Builder
-		for peer := range p.httpGetters {
-			// 解析 URL
-			parsedURL, err := url.Parse(peer)
-			if err != nil {
-				output.WriteString(fmt.Sprintf("Peer: %s (invalid URL)\n", peer))
-				continue
-			}
-			// 提取 host 部分（可能包含端口）
-			host := parsedURL.Host
-			// 拆分 IP 和端口
-			ip, port, err := net.SplitHostPort(host)
-			if err != nil {
-				// 如果拆分失败，则直接输出 host
-				output.WriteString(fmt.Sprintf("Peer: %s, Host: %s\n", peer, host))
-			} else {
-				output.WriteString(fmt.Sprintf("Peer: %s, IP: %s, Port: %s\n", peer, ip, port))
-			}
-		}
-		w.Header().Set("Content-Type", "text/plain")
-		w.Write([]byte(output.String()))
-		return
-	}
-
 	// 处理 /<group>/<key> 请求
 	parts := strings.SplitN(path, "/", 2)
 	if len(parts) != 2 {
@@ -135,6 +107,32 @@ func (p *HTTPPool) PickPeer(key string) (PeerGetter, bool) {
 		return p.httpGetters[peer], true
 	}
 	return nil, false
+}
+
+// GetPeers peers from cache
+func (p *HTTPPool) GetPeers() (res string) {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	var output strings.Builder
+	for peer := range p.httpGetters {
+		// 解析 URL
+		parsedURL, err := url.Parse(peer)
+		if err != nil {
+			output.WriteString(fmt.Sprintf("Peer: %s (invalid URL)\n", peer))
+			continue
+		}
+		// 提取 host 部分（可能包含端口）
+		host := parsedURL.Host
+		// 拆分 IP 和端口
+		ip, port, err := net.SplitHostPort(host)
+		if err != nil {
+			// 如果拆分失败，则直接输出 host
+			output.WriteString(fmt.Sprintf("Peer: %s, Host: %s\n", peer, host))
+		} else {
+			output.WriteString(fmt.Sprintf("Peer: %s, IP: %s, Port: %s\n", peer, ip, port))
+		}
+	}
+	return output.String()
 }
 
 type httpGetter struct {

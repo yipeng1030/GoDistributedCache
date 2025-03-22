@@ -2,11 +2,11 @@ package main
 
 import (
 	"GoDistributedCache"
-	"flag"
 	"fmt"
 	"log"
 	"net"
 	"net/http"
+	"os"
 	"time"
 )
 
@@ -68,31 +68,27 @@ func startAPIServer(apiAddr string, gee *GoDistributedCache.Group) {
 				return
 			}
 			w.Header().Set("Content-Type", "application/octet-stream")
-			w.Write(view.ByteSlice())
-
+			w.Write(append(view.ByteSlice(), []byte("\n")...))
 		}))
+	// 新增 /peers 接口，返回当前 HTTPPool 中的 peer 信息
+	http.Handle("/peers", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		output := gee.GetPeers()
+		w.Header().Set("Content-Type", "text/plain")
+		w.Write([]byte(output))
+	}))
 	log.Println("fontend server is running at", apiAddr)
 	log.Fatal(http.ListenAndServe(apiAddr[7:], nil))
 }
 
 func main() {
-	var port int
-	var api bool
-	flag.IntVar(&port, "port", 8001, "GoDistributedCache server port")
-	flag.BoolVar(&api, "api", true, "Start a api server?")
-	flag.Parse()
-
 	apiAddr := "http://0.0.0.0:9999"
-
 	gee := createGroup()
-	if api {
-		go startAPIServer(apiAddr, gee)
-	}
-	flag.Parse()
+	go startAPIServer(apiAddr, gee)
 
 	// 假设使用 DNS 服务发现的域名，需在 k8s 中配置好 Headless Service
 	dnsServiceName := "mycache-headless.default.svc.cluster.local"
-	addr := fmt.Sprintf("http://0.0.0.0:%d", port)
+	podIP := os.Getenv("MY_POD_IP")
+	selfAddr := fmt.Sprintf("http://%s:8001", podIP)
 
-	startCacheServer(addr, dnsServiceName, gee)
+	startCacheServer(selfAddr, dnsServiceName, gee)
 }
