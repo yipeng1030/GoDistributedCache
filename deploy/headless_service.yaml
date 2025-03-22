@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: mycache-headless
+spec:
+  clusterIP: None
+  selector:
+    app: mycache
+  ports:
+    - port: 8001
+      targetPort: 8001

@@ -82,7 +82,7 @@ func main() {
 	flag.BoolVar(&api, "api", true, "Start a api server?")
 	flag.Parse()
 
-	apiAddr := "http://localhost:9999"
+	apiAddr := "http://0.0.0.0:9999"
 
 	gee := createGroup()
 	if api {
@@ -92,7 +92,7 @@ func main() {
 
 	// 假设使用 DNS 服务发现的域名，需在 k8s 中配置好 Headless Service
 	dnsServiceName := "mycache-headless.default.svc.cluster.local"
-	addr := fmt.Sprintf("http://localhost:%d", port)
+	addr := fmt.Sprintf("http://0.0.0.0:%d", port)
 
 	startCacheServer(addr, dnsServiceName, gee)
 }
